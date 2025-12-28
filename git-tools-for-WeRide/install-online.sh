@@ -1,7 +1,7 @@
 #!/bin/bash
 # ============================================
 # Git Tools 在线安装脚本
-# 从 GitHub 下载 git-tools-for-WeRide 到本地 git-tools-from-tengxian
+# 从 GitHub 下载所有文件到本地 .tools-from-Tengxian
 # ============================================
 
 set -e
@@ -20,7 +20,7 @@ GITHUB_BRANCH="WeRide"
 GITHUB_RAW="https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/${GITHUB_BRANCH}/git-tools-for-WeRide"
 
 # 本地安装目录
-INSTALL_DIR="$(pwd)/git-tools-from-tengxian"
+INSTALL_DIR="$(pwd)/.tools-from-Tengxian"
 
 print_info() {
     echo -e "${BLUE}ℹ${NC} $1"
@@ -65,7 +65,7 @@ download_file() {
     $DOWNLOAD_CMD "$url" > "$output" 2>/dev/null
 }
 
-# 下载并安装
+# 下载并安装所有文件
 install_git_tools() {
     print_header "下载文件"
 
@@ -95,16 +95,25 @@ install_git_tools() {
         fi
     done
 
-    # 下载其他文件（可选）
-    local optional_files=("README.md" "diff_list.txt")
-    for file in "${optional_files[@]}"; do
+    # 下载所有其他文件
+    local other_files=("README.md" "diff_list.txt" "install-online.sh")
+    for file in "${other_files[@]}"; do
         echo "下载 $file..."
         if download_file "${GITHUB_RAW}/${file}" "$INSTALL_DIR/${file}" 2>/dev/null; then
+            # 如果是 .sh 文件，添加执行权限
+            if [[ "$file" == *.sh ]]; then
+                chmod +x "$INSTALL_DIR/${file}"
+            fi
             print_success "$file"
         else
-            print_info "$file (不存在或下载失败，跳过)"
+            print_info "$file (不存在，跳过)"
         fi
     done
+
+    print_header "设置权限"
+    # 确保所有 .sh 文件都有执行权限
+    find "$INSTALL_DIR" -type f -name "*.sh" -exec chmod +x {} \;
+    print_success "已设置所有脚本文件的执行权限"
 }
 
 # 添加到 git exclude
@@ -120,11 +129,11 @@ add_to_exclude() {
     mkdir -p .git/info
     touch "$exclude_file"
 
-    if grep -qE "^git-tools-from-tengxian/?$" "$exclude_file" 2>/dev/null; then
-        print_info "git-tools-from-tengxian 已在 exclude 中"
+    if grep -qE "^\.tools-from-Tengxian/?$" "$exclude_file" 2>/dev/null; then
+        print_info ".tools-from-Tengxian 已在 exclude 中"
     else
-        echo "git-tools-from-tengxian/" >> "$exclude_file"
-        print_success "已添加到 git exclude"
+        echo ".tools-from-Tengxian/" >> "$exclude_file"
+        print_success "已添加 .tools-from-Tengxian/ 到 git exclude"
     fi
 }
 
@@ -135,15 +144,15 @@ show_completion() {
     echo -e "${GREEN}✓ Git Tools 安装成功！${NC}"
     echo ""
     echo "📦 安装位置："
-    echo "   $(pwd)/git-tools-from-tengxian/"
+    echo "   $(pwd)/.tools-from-Tengxian/"
     echo ""
     echo "🚀 使用命令："
-    echo "   ./git-tools-from-tengxian/git-tools.sh check"
-    echo "   ./git-tools-from-tengxian/git-tools.sh patch"
-    echo "   ./git-tools-from-tengxian/git-tools.sh reset"
+    echo "   ./.tools-from-Tengxian/git-tools.sh check"
+    echo "   ./.tools-from-Tengxian/git-tools.sh patch"
+    echo "   ./.tools-from-Tengxian/git-tools.sh reset"
     echo ""
     echo "💡 建议：创建别名"
-    echo "   ${BLUE}alias gt=\"$(pwd)/git-tools-from-tengxian/git-tools.sh\"${NC}"
+    echo "   ${BLUE}alias gt=\"\$(pwd)/.tools-from-Tengxian/git-tools.sh\"${NC}"
     echo ""
 }
 
@@ -152,7 +161,7 @@ main() {
     print_header "Git Tools 安装"
 
     echo "仓库: ${GITHUB_USER}/${GITHUB_REPO}"
-    echo "安装位置: $(pwd)/git-tools-from-tengxian/"
+    echo "安装位置: $(pwd)/.tools-from-Tengxian/"
     echo ""
 
     check_dependencies
