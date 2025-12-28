@@ -1,58 +1,41 @@
 #!/bin/bash
 
-# ==========================================
-# Git Tools 兼容性部署脚本 (2025版)
-# ==========================================
-
+# 1. 定义变量
 REPO_URL="https://github.com/Tenghsien/git-tools.git"
 TARGET_DIR=".tools-from-Tengxian"
 SUB_FOLDER="git-tools-for-WeRide"
 BRANCH="WeRide"
-TEMP_DIR=".temp_git_tools_setup"
 
-CURRENT_DIR=$(pwd)
+echo "正在部署工具到 $TARGET_DIR..."
 
-echo "🚀 开始部署工具到: $CURRENT_DIR"
+# 2. 清理可能存在的旧目录
+rm -rf "$TARGET_DIR" .temp_git_clone
 
-# 1. 环境清理：确保没有残留的临时文件夹
-rm -rf "$TEMP_DIR" "$TARGET_DIR"
+# 3. 简单粗暴地克隆整个分支 (最稳健)
+git clone -b "$BRANCH" --depth 1 "$REPO_URL" .temp_git_clone
 
-# 2. 深度为1的浅克隆 (速度最快)
-echo "正在从远程获取文件..."
-if ! git clone --depth 1 --branch "$BRANCH" "$REPO_URL" "$TEMP_DIR"; then
-    echo "❌ 错误: 克隆仓库失败，请检查网络连接。"
-    exit 1
-fi
-
-# 3. 提取目标文件夹到最终位置
-if [ -d "$TEMP_DIR/$SUB_FOLDER" ]; then
-    mkdir -p "$TARGET_DIR"
-    cp -r "$TEMP_DIR/$SUB_FOLDER"/* "$TARGET_DIR/"
-    echo "✅ 文件提取成功。"
+# 4. 将目标文件夹搬移到最终位置，并赋予权限
+if [ -d ".temp_git_clone/$SUB_FOLDER" ]; then
+    mv ".temp_git_clone/$SUB_FOLDER" "$TARGET_DIR"
+    chmod -R +x "$TARGET_DIR"
+    echo "✅ 文件夹已创建并设置权限。"
 else
-    echo "❌ 错误: 在仓库中未找到目录 $SUB_FOLDER"
-    rm -rf "$TEMP_DIR"
+    echo "❌ 错误：找不到文件夹 $SUB_FOLDER"
+    rm -rf .temp_git_clone
     exit 1
 fi
 
-# 4. 清理临时文件
-rm -rf "$TEMP_DIR"
+# 5. 清理克隆的垃圾文件
+rm -rf .temp_git_clone
 
-# 5. 设置权限
-echo "正在设置执行权限..."
-chmod -R +x "$TARGET_DIR"
-
-# 6. 设置 Git 本地忽略
+# 6. 添加到 exclude (仅当在 git 仓库时)
 if [ -d ".git" ]; then
+    # 确保文件存在且不重复添加
     touch .git/info/exclude
     if ! grep -q "$TARGET_DIR/" .git/info/exclude; then
         echo "$TARGET_DIR/" >> .git/info/exclude
         echo "✅ 已添加到 .git/info/exclude"
     fi
-else
-    echo "⚠️  提示: 当前不是 Git 仓库，跳过排除设置。"
 fi
 
-echo "---"
-echo "🎉 部署完成！"
-echo "你可以通过 $TARGET_DIR 访问你的工具。"
+echo "🎉 部署完成。"
