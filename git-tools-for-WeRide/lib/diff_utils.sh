@@ -3,6 +3,9 @@
 # Diff 操作工具函数库
 # ============================================
 
+# 配置文件路径由主脚本传入
+# DIFF_LIST_FILE 已在 git-tools.sh 中定义为 FILE_PATH
+
 # ============================================
 # Diff 提取和解析
 # ============================================
@@ -10,7 +13,7 @@
 # 从文件中提取所有 diff ID
 extract_diff_ids() {
     local file_path=$1
-    cat "$file_path" | 
+    cat "$file_path" |
     sed 's/[,， ]/\n/g' |  # 把逗号(中英)、空格全换成换行
     sed 's/^[ \t]*//;s/[ \t]*$//' |  # 去除每行首尾空格/制表符
     grep -v '^$' |  # 过滤空行
@@ -28,7 +31,7 @@ check_diff_in_branch() {
     git log | grep -q "$diff_id"
 }
 
-# 优化版：一次性获取 git log，批量检查
+# 检查所有 diff 并返回未合入的列表
 check_all_diffs() {
     local file_path=$1
     local unmerged_list=$(mktemp)
@@ -37,14 +40,14 @@ check_all_diffs() {
 
     while IFS= read -r diff_id; do
         total_count=$((total_count + 1))
+        echo "正在检查 $diff_id..."
 
-        # 简单判断：有输出=在分支，无输出=不在分支
-        if check_diff_in_branch "$diff_id"; then
-            echo -e "${GREEN}✅${NC} $diff_id 已合入" >&2
-        else
-            echo -e "${RED}❌${NC} $diff_id 未合入" >&2
+        if ! check_diff_in_branch "$diff_id"; then
+            echo -e "  ${RED}❌ $diff_id 未合入该分支${NC}"
             echo "$diff_id" >> "$unmerged_list"
             unmerged_count=$((unmerged_count + 1))
+        else
+            echo -e "  ${GREEN}✅ $diff_id 已合入${NC}"
         fi
     done < <(extract_diff_ids "$file_path")
 
