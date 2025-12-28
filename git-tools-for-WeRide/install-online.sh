@@ -94,6 +94,17 @@ install_git_tools() {
             exit 1
         fi
     done
+
+    # 下载其他文件（可选）
+    local optional_files=("README.md" "diff_list.txt")
+    for file in "${optional_files[@]}"; do
+        echo "下载 $file..."
+        if download_file "${GITHUB_RAW}/${file}" "$INSTALL_DIR/${file}" 2>/dev/null; then
+            print_success "$file"
+        else
+            print_info "$file (不存在或下载失败，跳过)"
+        fi
+    done
 }
 
 # 添加到 git exclude
