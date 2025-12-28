@@ -1,186 +1,262 @@
 #!/bin/bash
 # ============================================
-# Diff Manager - 模块化版本
-# 统一的 diff 管理工具
+# Git Tools 在线安装脚本
+# 安装到当前目录，方便 VSCode 操作
 # ============================================
 
-# 获取脚本所在目录
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+set -e
 
-# 加载库文件
-source "$SCRIPT_DIR/lib/common.sh"
-source "$SCRIPT_DIR/lib/diff_utils.sh"
-source "$SCRIPT_DIR/lib/git_ops.sh"
+# 颜色定义
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
 
-# ============================================
-# 配置区域
-# ============================================
-FILE_PATH="$SCRIPT_DIR/diff_list.txt"
+# 配置 - 修改为你的 GitHub 仓库信息
+GITHUB_USER="Tenghsien"              # 你的 GitHub 用户名
+GITHUB_REPO="git-tools"              # 仓库名
+GITHUB_BRANCH="WeRide"               # 分支名
 
-# ============================================
-# 显示使用说明
-# ============================================
-show_usage() {
-    echo "用法:"
-    echo "  $0 check   - 只检查diff是否在当前分支"
-    echo "  $0 patch   - 检查diff后，将不存在的diff patch上"
-    echo "  $0 reset   - 强制同步远程代码，放弃所有本地更改"
-    exit 1
+GITHUB_RAW="https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/${GITHUB_BRANCH}"
+
+TOOL_NAME="git-tools"
+# 安装到当前目录
+INSTALL_DIR="$(pwd)/.git-tools-from-tengxian"
+TEMP_DIR="/tmp/git-tools-install-$$"
+
+print_info() {
+    echo -e "${BLUE}ℹ${NC} $1"
 }
 
-# ============================================
-# 核心功能函数
-# ============================================
-
-# 检查diff是否在当前分支
-check_diffs() {
-    # 先更新 git 仓库
-    update_git_repo
-
-    print_title "开始检查 diff 状态"
-
-    # 检查所有 diff
-    local result_file=$(check_all_diffs "$FILE_PATH")
-    local total=$(cat "${result_file}.total")
-    local unmerged=$(cat "${result_file}.unmerged")
-
-    # 打印统计结果
-    print_check_summary "$total" "$unmerged" "$result_file"
-
-    # 清理临时文件
-    cleanup_temp_files "$result_file" "${result_file}.total" "${result_file}.unmerged"
-
-    # 返回状态
-    [ $unmerged -eq 0 ] && return 0 || return 1
+print_success() {
+    echo -e "${GREEN}✓${NC} $1"
 }
 
-# patch未合入的diff
-patch_diffs() {
-    # 先更新 git 仓库
-    update_git_repo
+print_error() {
+    echo -e "${RED}✗${NC} $1"
+}
 
-    print_title "开始检查并 patch diff"
+print_warning() {
+    echo -e "${YELLOW}⚠${NC} $1"
+}
 
-    # 创建临时文件存储未合入的diff
-    local unmerged_file=$(create_temp_file)
-
-    echo "第一步：检查diff状态..."
+print_header() {
     echo ""
-
-    # 检查所有 diff 并获取未合入的列表
-    local total_count=0
-    local unmerged_count=0
-
-    while IFS= read -r diff_id; do
-        total_count=$((total_count + 1))
-        echo "正在检查 $diff_id..."
-
-        if ! check_diff_in_branch "$diff_id"; then
-            echo -e "  ${RED}❌ $diff_id 未合入该分支${NC}"
-            echo "$diff_id" >> "$unmerged_file"
-            unmerged_count=$((unmerged_count + 1))
-        else
-            echo -e "  ${GREEN}✅ $diff_id 已合入${NC}"
-        fi
-    done < <(extract_diff_ids "$FILE_PATH")
-
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BLUE}  $1${NC}"
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
-    print_separator
-    echo "检查完成！共检查 $total_count 个 diff"
-    echo -e "${RED}有 $unmerged_count 个 diff 未合入${NC}"
-    print_separator
+}
 
-    # 如果没有未合入的diff，直接返回
-    if [ $unmerged_count -eq 0 ]; then
-        print_success "所有 diff 已全部合入该分支，无需 patch"
-        cleanup_temp_files "$unmerged_file"
-        return 0
+# 清理临时目录
+cleanup() {
+    if [ -d "$TEMP_DIR" ]; then
+        rm -rf "$TEMP_DIR"
+    fi
+}
+
+trap cleanup EXIT
+
+# 检查命令是否存在
+check_command() {
+    command -v "$1" &> /dev/null
+}
+
+# 检查依赖
+check_dependencies() {
+    print_header "检查依赖"
+
+    # 检查下载工具
+    if check_command curl; then
+        DOWNLOAD_CMD="curl -fsSL"
+        print_success "curl 已安装"
+    elif check_command wget; then
+        DOWNLOAD_CMD="wget -qO-"
+        print_success "wget 已安装"
+    else
+        print_error "需要 curl 或 wget 来下载文件"
+        exit 1
     fi
 
-    echo ""
-    print_title "第二步：开始 patch 未合入的 diff"
+    # 检查必要工具
+    local deps=("git" "arc")
+    local missing=()
 
-    # 显示未合入的 diff 列表
-    echo "未合入的 diff 列表："
-    echo "----------------------------------------"
-    mapfile -t diff_array < "$unmerged_file"
-    for diff_id in "${diff_array[@]}"; do
-        echo "  $diff_id"
-    done
-    echo "----------------------------------------"
-    echo ""
-
-    # 统计patch结果
-    local success=0
-    local failed=0
-    local failed_diffs=()
-    local current=0
-
-    for diff_id in "${diff_array[@]}"; do
-        ((current++))
-        print_separator
-        echo "[$current/$unmerged_count] 正在 patch: $diff_id"
-        print_separator
-
-        # 执行 patch
-        if patch_single_diff "$diff_id"; then
-            echo ""
-            print_success "$diff_id 应用成功"
-            ((success++))
+    for dep in "${deps[@]}"; do
+        if check_command "$dep"; then
+            print_success "$dep 已安装"
         else
-            echo ""
-            print_error "$diff_id 应用失败（可能有冲突）"
-            ((failed++))
-            failed_diffs+=("$diff_id")
-            # 清理失败的patch痕迹
-            cleanup_failed_patch
+            print_warning "$dep 未安装（运行时需要）"
+            missing+=("$dep")
         fi
+    done
+
+    if [ ${#missing[@]} -ne 0 ]; then
         echo ""
-    done
-
-    # 输出统计
-    print_patch_summary "$unmerged_count" "$success" "$failed" "${failed_diffs[@]}"
-
-    # 清理临时文件
-    cleanup_temp_files "$unmerged_file"
+        print_warning "以下工具在使用时必需："
+        for dep in "${missing[@]}"; do
+            echo "  - $dep"
+        done
+    fi
 }
 
-# 强制同步远程代码
-reset_to_remote() {
-    reset_to_remote_branch ""
-}
+# 下载文件
+download_file() {
+    local url=$1
+    local output=$2
 
-# ============================================
-# 主程序入口
-# ============================================
-main() {
-    # 检查是否在 git 仓库中
-    check_git_repo
+    if [ -z "$DOWNLOAD_CMD" ]; then
+# 下载文件
+download_file() {
+    local url=$1
+    local output=$2
 
-    # 检查参数
-    if [ $# -eq 0 ]; then
-        show_usage
+    if [ -z "$DOWNLOAD_CMD" ]; then
+        print_error "下载命令未初始化"
+        return 1
     fi
 
-    local command=$1
-
-    case "$command" in
-        check)
-            check_diffs
-            ;;
-        patch)
-            patch_diffs
-            ;;
-        reset)
-            reset_to_remote
-            ;;
-        *)
-            print_error "未知命令 '$command'"
-            echo ""
-            show_usage
-            ;;
-    esac
+    $DOWNLOAD_CMD "$url" > "$output" 2>/dev/null
 }
 
-# 执行主程序
-main "$@"
+# 下载并安装文件
+download_and_install() {
+    print_header "下载文件"
+
+    mkdir -p "$TEMP_DIR/lib"
+    print_info "创建临时目录: $TEMP_DIR"
+
+    echo "正在下载主脚本..."
+    if download_file "${GITHUB_RAW}/git-tools-for-WeRide/git-tools.sh" "$TEMP_DIR/git-tools.sh"; then
+        print_success "git-tools.sh 下载成功"
+    else
+        print_error "下载 git-tools.sh 失败"
+        exit 1
+    fi
+
+    local lib_files=("common.sh" "diff_utils.sh" "git_ops.sh")
+    for file in "${lib_files[@]}"; do
+        echo "正在下载 lib/$file..."
+        if download_file "${GITHUB_RAW}/git-tools-for-WeRide/lib/${file}" "$TEMP_DIR/lib/${file}"; then
+            print_success "lib/$file 下载成功"
+        else
+            print_error "下载 lib/$file 失败"
+            exit 1
+        fi
+    done
+}
+
+# 安装文件
+install_files() {
+    print_header "安装文件"
+
+    mkdir -p "$INSTALL_DIR/lib"
+
+    cp "$TEMP_DIR/git-tools.sh" "$INSTALL_DIR/"
+    chmod +x "$INSTALL_DIR/git-tools.sh"
+    print_success "安装主脚本"
+
+    cp "$TEMP_DIR/lib/"*.sh "$INSTALL_DIR/lib/"
+    print_success "安装库文件"
+
+    cat > "$INSTALL_DIR/git-tools" << 'INNER_SCRIPT'
+#!/bin/bash
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+exec "$SCRIPT_DIR/git-tools.sh" "$@"
+INNER_SCRIPT
+    chmod +x "$INSTALL_DIR/git-tools"
+    print_success "创建启动脚本"
+}
+
+# 创建配置文件（在 .git-tools 文件夹下）
+create_config_example() {
+    print_header "创建配置文件"
+
+    local config_file="$INSTALL_DIR/diff_list.txt"
+
+    if [ -f "$config_file" ]; then
+        print_info "diff_list.txt 已存在，跳过创建"
+        return
+    fi
+
+    cat > "$config_file" << 'CONFIG_EOF'
+# Diff List 配置文件
+# 每行一个 Phabricator Diff ID
+# 示例：
+# D12345
+# D12346
+
+CONFIG_EOF
+
+    print_success "创建配置文件: .git-tools-from-tengxian/diff_list.txt"
+}
+
+# 添加到 git exclude
+add_to_git_exclude() {
+    print_header "配置 Git 忽略"
+
+    if [ ! -d ".git" ]; then
+        print_warning "不在 git 仓库中，跳过 git ignore 配置"
+        return
+    fi
+
+    local exclude_file=".git/info/exclude"
+    mkdir -p .git/info
+    touch "$exclude_file"
+
+    local items=(".git-tools-from-tengxian/" ".git-tools-from-tengxian")
+
+    for item in "${items[@]}"; do
+        if grep -qE "^${item}/?$" "$exclude_file" 2>/dev/null; then
+            print_info "$item 已在 git exclude 中"
+        else
+            echo "$item" >> "$exclude_file"
+            print_success "已添加 $item 到 git exclude"
+        fi
+    done
+}
+
+# 显示完成信息
+show_completion() {
+    print_header "安装完成"
+
+    echo -e "${GREEN}✓ Git Tools 安装成功！${NC}"
+    echo ""
+    echo "📦 安装位置："
+    echo "   $(pwd)/.git-tools-from-tengxian/"
+    echo ""
+    echo "📝 配置文件："
+    echo "   $(pwd)/.git-tools-from-tengxian/diff_list.txt"
+    echo "   直接编辑此文件，添加你的 Diff ID"
+    echo ""
+    echo "🚀 使用命令："
+    echo "   ./.git-tools-from-tengxian/git-tools check   - 检查 diff 状态"
+    echo "   ./.git-tools-from-tengxian/git-tools patch   - 应用未合入的 diff"
+    echo "   ./.git-tools-from-tengxian/git-tools reset   - 重置到远程分支"
+    echo ""
+    echo "💡 建议：创建别名方便使用"
+    echo "   ${BLUE}alias gt=\"$(pwd)/.git-tools-from-tengxian/git-tools\"${NC}"
+    echo "   然后可以直接用: ${BLUE}gt check${NC}"
+    echo ""
+}
+
+# 主函数
+main() {
+    print_header "Git Tools 在线安装"
+
+    echo "将从 GitHub 下载并安装 Git Tools"
+    echo "仓库: ${GITHUB_USER}/${GITHUB_REPO}"
+    echo "安装位置: $(pwd)/.git-tools-from-tengxian/"
+    echo ""
+
+    check_dependencies
+    download_and_install
+    install_files
+    create_config_example
+    add_to_git_exclude
+    show_completion
+}
+
+# 执行主函数
+main
