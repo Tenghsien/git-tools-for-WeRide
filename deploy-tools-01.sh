@@ -3,7 +3,7 @@ set -e
 
 # ===================== 核心配置（按需修改）=====================
 # 替换为你的 git-tools 仓库 HTTPS 地址
-REPO_URL="https://github.com/你的用户名/git-tools.git"
+REPO_URL="https://github.com/Tenghsien/git-tools.git"
 # 本地目标文件夹名（取消隐藏，去掉前缀.）
 TARGET_DIR="tools-from-Tengxian"
 # 替换为你需要部署的分支名（比如 dev/test/feature 等）
