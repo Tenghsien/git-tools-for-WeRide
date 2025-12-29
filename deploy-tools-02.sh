@@ -4,8 +4,10 @@ set -e
 # ===================== 核心配置（按需修改）=====================
 # 替换为你的 git-tools 仓库 HTTPS 地址
 REPO_URL="https://github.com/Tenghsien/git-tools.git"
-# 本地目标文件夹名（取消隐藏，去掉前缀.）
+# 本地目标文件夹名（克隆仓库的目录名）
 TARGET_DIR="tools-from-Tengxian"
+# 工具所在的子目录名（仓库内的文件夹）
+TOOL_SUBDIR="git-tools-for-WeRide"
 # 替换为你需要部署的分支名（比如 dev/test/feature 等）
 DEPLOY_BRANCH="WeRide"  # 示例：DEPLOY_BRANCH="dev"
 
@@ -50,9 +52,10 @@ main() {
     green "代码下载完成"
 
     # 2. 配置文件权限（目录755/普通文件644/脚本加执行权限）
-    chmod -R 755 "$TARGET_DIR/"                          # 所有目录赋可读写执行权限
-    find "$TARGET_DIR" -type f -exec chmod 644 {} \;     # 普通文件赋可读可写权限
-    find "$TARGET_DIR" -type f \( -name "*.sh" -o -name "git-tools" \) -exec chmod +x {} \;  # 脚本和工具加执行权限
+    TOOL_PATH="$TARGET_DIR/$TOOL_SUBDIR"
+    chmod -R 755 "$TOOL_PATH/"                          # 所有目录赋可读写执行权限
+    find "$TOOL_PATH" -type f -exec chmod 644 {} \;     # 普通文件赋可读可写权限
+    find "$TOOL_PATH" -type f \( -name "*.sh" -o -name "git-tools" \) -exec chmod +x {} \;  # 脚本和工具加执行权限
     green "权限配置完成"
 
     # 3. 加入 .git/info/exclude（避免git追踪）
@@ -75,7 +78,7 @@ main() {
     green "✅ 部署全部完成！"
     echo "=========================================="
     echo ""
-    echo "📁 工具文件夹路径：$PWD/$TARGET_DIR"
+    echo "📁 工具文件夹路径：$PWD/$TARGET_DIR/$TOOL_SUBDIR"
     echo "🌿 部署分支：$DEPLOY_BRANCH"
     echo ""
 
@@ -84,7 +87,7 @@ main() {
     echo "----------------------------------------"
     echo "请复制并执行以下命令："
     echo ""
-    echo -e "\033[1;31m  sudo ln -sf $PWD/$TARGET_DIR/git-tools /usr/local/bin/git-tools\033[0m"
+    echo -e "\033[1;31m  sudo ln -sf $PWD/$TARGET_DIR/$TOOL_SUBDIR/git-tools /usr/local/bin/git-tools\033[0m"
     echo ""
     echo "创建后，可以在任何目录直接使用："
     echo "  git-tools check   # 检查 diff 状态"
@@ -92,7 +95,7 @@ main() {
     echo "  git-tools reset   # 强制同步远程代码"
     echo ""
     yellow "如果不创建全局命令，也可以进入目录使用："
-    echo "  cd $TARGET_DIR"
+    echo "  cd $TARGET_DIR/$TOOL_SUBDIR"
     echo "  ./git-tools check"
     echo ""
 }
